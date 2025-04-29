@@ -21,7 +21,7 @@ O **WPost Generator** é um plugin para WordPress que gera posts automaticamente
 
 ## Configurações
 
-- **Template de Prompt:** Defina o template para a geração dos posts (exemplo: `Escreva um post otimizado para SEO sobre [TEMA]. Detalhes: [DETALHES].`).
+- **Template de Prompt:** Defina o template para a geração dos posts (exemplo: `Escreva um post otimizado para SEO sobre .... Detalhes: ....`).
 - **Status do Post:** Escolha se os posts serão gerados como rascunho ou publicados.
 - **Frequência:** Defina a frequência (em horas) para a geração dos posts.
 - **Posts por Ciclo:** Quantidade de posts gerados a cada execução.
