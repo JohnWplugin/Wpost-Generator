@@ -1,0 +1,652 @@
+/* Estilos para o painel administrativo do PostPilotAI */
+.oapg-admin-wrap {
+    margin: 20px 0 0 0;
+    background: #fff;
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    overflow: hidden;
+}
+
+.oapg-admin-header {
+    background: #f9f9f9;
+    border-bottom: 1px solid #e5e5e5;
+    padding: 15px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.oapg-admin-header h1 {
+    margin: 0;
+    padding: 0;
+    font-size: 20px;
+    font-weight: 600;
+    color: #23282d;
+}
+
+.oapg-admin-container {
+    display: flex;
+    min-height: 600px;
+}
+
+.oapg-admin-sidebar {
+    width: 220px;
+    background: #f9f9f9;
+    border-right: 1px solid #e5e5e5;
+}
+
+.oapg-admin-sidebar ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.oapg-admin-sidebar li {
+    margin: 0;
+    padding: 0;
+}
+
+.oapg-admin-sidebar a {
+    display: block;
+    padding: 12px 20px;
+    text-decoration: none;
+    color: #23282d;
+    border-left: 3px solid transparent;
+    font-size: 14px;
+    transition: all 0.2s ease;
+}
+
+.oapg-admin-sidebar a:hover {
+    background: #f1f1f1;
+    border-left-color: #ccc;
+}
+
+.oapg-admin-sidebar a.active {
+    background: #fff;
+    border-left-color: #2271b1;
+    color: #2271b1;
+    font-weight: 600;
+}
+
+.oapg-admin-sidebar .dashicons {
+    margin-right: 8px;
+    color: #72777c;
+}
+
+.oapg-admin-content {
+    flex: 1;
+    padding: 20px;
+}
+
+.oapg-tab-content {
+    display: none;
+}
+
+.oapg-tab-content.active {
+    display: block;
+}
+
+.oapg-card {
+    background: #fff;
+    border: 1px solid #e5e5e5;
+    border-radius: 4px;
+    margin-bottom: 20px;
+    padding: 20px;
+}
+
+.oapg-card h2 {
+    margin-top: 0;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #eee;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.oapg-form-row {
+    margin-bottom: 15px;
+}
+
+.oapg-form-row label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 500;
+}
+
+.oapg-form-row input[type="text"],
+.oapg-form-row input[type="number"],
+.oapg-form-row textarea,
+.oapg-form-row select {
+    width: 100%;
+    max-width: 400px;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.oapg-form-row textarea {
+    min-height: 100px;
+}
+
+.oapg-form-row .description {
+    margin-top: 5px;
+    color: #666;
+    font-size: 13px;
+}
+
+.oapg-status-box {
+    background: #fff;
+    border: 1px solid #e5e5e5;
+    border-radius: 4px;
+    padding: 15px;
+    margin-top: 10px;
+}
+
+.oapg-progress-bar {
+    background-color: #e5e5e5;
+    height: 20px;
+    border-radius: 3px;
+    margin-bottom: 10px;
+}
+
+.oapg-progress {
+    background-color: #2271b1;
+    height: 100%;
+    border-radius: 3px;
+}
+
+.oapg-button {
+    background: #2271b1;
+    border: none;
+    color: #fff;
+    padding: 8px 15px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background 0.2s ease;
+}
+
+.oapg-button:hover {
+    background: #135e96;
+}
+
+.oapg-button.secondary {
+    background: #f6f7f7;
+    border: 1px solid #ddd;
+    color: #2c3338;
+}
+
+.oapg-button.secondary:hover {
+    background: #f0f0f1;
+}
+
+/* Estilos para a seção de debug */
+.oapg-debug-section {
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #eee;
+}
+
+.oapg-debug-section:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+.oapg-debug-section h3 {
+    font-size: 15px;
+    margin-top: 0;
+    margin-bottom: 15px;
+    color: #23282d;
+}
+
+.oapg-result {
+    margin-top: 20px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-left: 4px solid #2271b1;
+}
+
+.oapg-text-result {
+    max-height: 300px;
+    overflow-y: auto;
+    padding: 10px;
+    background: #fff;
+    border: 1px solid #e5e5e5;
+    border-radius: 3px;
+}
+
+.oapg-post-result {
+    padding: 10px;
+    background: #fff;
+    border: 1px solid #e5e5e5;
+    border-radius: 3px;
+}
+
+/* Estilos para a seção de status */
+.oapg-status-info {
+    margin-bottom: 15px;
+}
+
+.oapg-actions {
+    margin-top: 15px;
+    display: flex;
+    gap: 10px;
+}
+
+/* Estilos para notificações */
+.oapg-notice {
+    padding: 12px 15px;
+    margin: 15px 0;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+}
+
+.oapg-notice.success {
+    background-color: #ecf7ed;
+    border-left: 4px solid #46b450;
+    color: #2a6f30;
+}
+
+.oapg-notice.error {
+    background-color: #f8e8e8;
+    border-left: 4px solid #dc3232;
+    color: #a72121;
+}
+
+.oapg-notice.warning {
+    background-color: #fff8e5;
+    border-left: 4px solid #ffb900;
+    color: #996a00;
+}
+
+.oapg-notice.info {
+    background-color: #e5f5fa;
+    border-left: 4px solid #00a0d2;
+    color: #007599;
+}
+
+.oapg-notice-icon {
+    margin-right: 10px;
+    font-size: 18px;
+}
+
+.oapg-notice-content {
+    flex: 1;
+}
+
+.oapg-notice-dismiss {
+    cursor: pointer;
+    color: #72777c;
+}
+
+/* Estilos para tooltips */
+.oapg-tooltip {
+    position: relative;
+    display: inline-block;
+    margin-left: 5px;
+    color: #72777c;
+    cursor: help;
+}
+
+.oapg-tooltip .dashicons {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+}
+
+.oapg-tooltip-content {
+    visibility: hidden;
+    width: 250px;
+    background-color: #23282d;
+    color: #fff;
+    text-align: left;
+    border-radius: 4px;
+    padding: 10px;
+    position: absolute;
+    z-index: 1;
+    bottom: 125%;
+    left: 50%;
+    margin-left: -125px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    font-weight: normal;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.oapg-tooltip-content::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    margin-left: -5px;
+    border-width: 5px;
+    border-style: solid;
+    border-color: #23282d transparent transparent transparent;
+}
+
+.oapg-tooltip:hover .oapg-tooltip-content {
+    visibility: visible;
+    opacity: 1;
+}
+
+/* Estilos para campos de API key */
+.oapg-api-key-field {
+    position: relative;
+}
+
+.oapg-api-key-field input[type="password"],
+.oapg-api-key-field input[type="text"] {
+    padding-right: 40px;
+}
+
+.oapg-toggle-visibility {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    cursor: pointer;
+    color: #72777c;
+}
+
+/* Estilos responsivos */
+@media screen and (max-width: 782px) {
+    .oapg-admin-container {
+        flex-direction: column;
+    }
+    
+    .oapg-admin-sidebar {
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid #e5e5e5;
+    }
+    
+    .oapg-admin-sidebar ul {
+        display: flex;
+        flex-wrap: wrap;
+    }
+    
+    .oapg-admin-sidebar li {
+        flex: 1 1 auto;
+    }
+    
+    .oapg-admin-sidebar a {
+        text-align: center;
+        padding: 15px 10px;
+        border-left: none;
+        border-bottom: 3px solid transparent;
+    }
+    
+    .oapg-admin-sidebar a.active {
+        border-left-color: transparent;
+        border-bottom-color: #2271b1;
+    }
+    
+    .oapg-admin-sidebar .dashicons {
+        display: block;
+        margin: 0 auto 5px;
+    }
+}
+
+/* Animações */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.oapg-fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+/* Estilos para o tema escuro */
+.admin-color-midnight .oapg-admin-sidebar a.active,
+.admin-color-ocean .oapg-admin-sidebar a.active,
+.admin-color-coffee .oapg-admin-sidebar a.active,
+.admin-color-ectoplasm .oapg-admin-sidebar a.active,
+.admin-color-sunrise .oapg-admin-sidebar a.active,
+.admin-color-blue .oapg-admin-sidebar a.active {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* Estilos para o botão de geração de post */
+.oapg-generate-now {
+    margin-top: 15px;
+    padding: 10px 15px;
+    background-color: #2271b1;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    transition: background-color 0.2s;
+}
+
+.oapg-generate-now:hover {
+    background-color: #135e96;
+}
+
+.oapg-generate-now .dashicons {
+    margin-right: 8px;
+}
+
+/* Estilos para o loader de processamento */
+.oapg-loader {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    margin-right: 10px;
+    border: 3px solid rgba(255,255,255,.3);
+    border-radius: 50%;
+    border-top-color: #fff;
+    animation: oapg-spin 1s ease-in-out infinite;
+}
+
+@keyframes oapg-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Estilos para o histórico de posts gerados */
+.oapg-history-table .oapg-status-badge.publish {
+    background-color: #ecf7ed;
+    color: #2a6f30;
+}
+
+/* Estilos para o dashboard */
+/* Add or update these styles in your admin-style.css file */
+.oapg-dashboard-stats {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 20px;
+}
+
+.oapg-stat-box {
+    background: #fff;
+    border: 1px solid #e2e4e7;
+    border-radius: 4px;
+    padding: 15px;
+    width: 30%;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    transition: all 0.3s ease;
+}
+
+.oapg-stat-box:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.oapg-stat-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.oapg-stat-value {
+    font-size: 28px;
+    font-weight: 600;
+    color: #2271b1;
+    margin-bottom: 5px;
+}
+
+.oapg-stat-label {
+    font-size: 14px;
+    color: #50575e;
+}
+
+.oapg-progress-container {
+    margin: 20px 0 30px;
+}
+
+.oapg-progress-bar {
+    height: 10px;
+    background-color: #f0f0f1;
+    border-radius: 5px;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+.oapg-progress {
+    height: 100%;
+    background-color: #2271b1;
+    border-radius: 5px;
+    transition: width 0.5s ease;
+}
+
+.oapg-progress-text {
+    text-align: center;
+    font-size: 14px;
+    color: #50575e;
+    margin: 0;
+}
+
+.oapg-quick-actions {
+    margin-top: 25px;
+    border-top: 1px solid #f0f0f1;
+    padding-top: 20px;
+}
+
+.oapg-quick-actions h3 {
+    margin-top: 0;
+}
+
+.oapg-action-buttons {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.oapg-recent-posts {
+    margin-top: 30px;
+}
+
+.oapg-recent-posts h3 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    font-size: 16px;
+    font-weight: 500;
+}
+
+/* Estilos para o card de criação de post de teste */
+.oapg-card + .oapg-card {
+    margin-top: 30px;
+}
+
+/* Responsividade para o dashboard */
+@media screen and (max-width: 782px) {
+    .oapg-dashboard-stats {
+        flex-direction: column;
+    }
+    
+    .oapg-stat-box {
+        width: 100%;
+    }
+    
+    .oapg-actions-container {
+        flex-direction: column;
+    }
+    
+    .oapg-actions-container .oapg-button {
+        width: 100%;
+        text-align: center;
+        justify-content: center;
+    }
+}
+
+/* Animações para o dashboard */
+.oapg-stat-box {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.oapg-stat-box:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+/* Estilos para o formulário de criação de post de teste */
+.oapg-test-post-form {
+    background: #f9f9f9;
+    border-radius: 4px;
+    padding: 20px;
+    margin-top: 15px;
+}
+
+.oapg-test-post-form .oapg-form-row:last-child {
+    margin-bottom: 0;
+}
+
+/* Estilos para o botão de criação de post de teste */
+.oapg-create-test-post {
+    background-color: #2271b1;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 15px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+
+.oapg-create-test-post:hover {
+    background-color: #135e96;
+}
+
+/* Estilos para o tema escuro no dashboard */
+.admin-color-midnight .oapg-stat-box,
+.admin-color-ocean .oapg-stat-box,
+.admin-color-coffee .oapg-stat-box,
+.admin-color-ectoplasm .oapg-stat-box,
+.admin-color-sunrise .oapg-stat-box,
+.admin-color-blue .oapg-stat-box {
+    background: rgba(255, 255, 255, 0.1);
+    border-left-color: rgba(255, 255, 255, 0.2);
+}
+
+.admin-color-midnight .oapg-stat-box .dashicons,
+.admin-color-ocean .oapg-stat-box .dashicons,
+.admin-color-coffee .oapg-stat-box .dashicons,
+.admin-color-ectoplasm .oapg-stat-box .dashicons,
+.admin-color-sunrise .oapg-stat-box .dashicons,
+.admin-color-blue .oapg-stat-box .dashicons {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.admin-color-midnight .oapg-stat-value,
+.admin-color-ocean .oapg-stat-value,
+.admin-color-coffee .oapg-stat-value,
+.admin-color-ectoplasm .oapg-stat-value,
+.admin-color-sunrise .oapg-stat-value,
+.admin-color-blue .oapg-stat-value {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.admin-color-midnight .oapg-stat-label,
+.admin-color-ocean .oapg-stat-label,
+.admin-color-coffee .oapg-stat-label,
+.admin-color-ectoplasm .oapg-stat-label,
+.admin-color-sunrise .oapg-stat-label,
+.admin-color-blue .oapg-stat-label {
+    color: rgba(255, 255, 255, 0.7);
+}
