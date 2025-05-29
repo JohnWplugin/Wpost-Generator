@@ -4,7 +4,7 @@
  * Description: Posts automaticos usando a AI
  * Version: 1.0
  * Author: John Amorim - WPlugin
- * Text Domain: wpost-generator
+ * Text Domain: openai-auto-post-generator
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
