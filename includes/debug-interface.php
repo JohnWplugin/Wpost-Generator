@@ -150,6 +150,187 @@ function oapg_debug_page() {
             }
             ?>
         </div>
+        
+        <div class="oapg-card">
+            <h2>Diagnóstico do Agendamento (WP-Cron)</h2>
+            <p>Esta seção mostra informações sobre o agendamento das tarefas de geração de posts.</p>
+            
+            <?php 
+            // Verifica o status do agendamento
+            if (function_exists('oapg_check_cron_schedule_status')) {
+                $cron_status = oapg_check_cron_schedule_status(true);
+                ?>
+                <table class="widefat oapg-cron-info">
+                    <tr>
+                        <th>Data/Hora Atual:</th>
+                        <td><?php echo $cron_status['current_time_formatted']; ?></td>
+                    </tr>
+                    <tr>
+                        <th>Próximo Agendamento:</th>
+                        <td><?php echo $cron_status['next_scheduled_formatted']; ?></td>
+                    </tr>
+                    <tr>
+                        <th>Tempo até Próxima Execução:</th>
+                        <td><?php echo $cron_status['diff_formatted']; ?></td>
+                    </tr>
+                    <tr>
+                        <th>Frequência Configurada:</th>
+                        <td><?php echo $cron_status['frequency']; ?> horas</td>
+                    </tr>
+                    <tr>
+                        <th>WP-Cron Ativo:</th>
+                        <td><?php echo $cron_status['cron_disabled'] ? '<span style="color:red">Não</span>' : '<span style="color:green">Sim</span>'; ?></td>
+                    </tr>
+                    <tr>
+                        <th>Status:</th>
+                        <td>
+                            <?php if (!$cron_status['next_scheduled']): ?>
+                                <span style="color:red">Não Agendado!</span>
+                            <?php elseif ($cron_status['is_overdue']): ?>
+                                <span style="color:orange">Atrasado</span>
+                            <?php else: ?>
+                                <span style="color:green">Agendado</span>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                    <?php if (isset($cron_status['found_in_array']) && $cron_status['found_in_array']): ?>
+                    <tr>
+                        <th>Timestamp no Array do Cron:</th>
+                        <td><?php echo isset($cron_status['scheduled_time']) ? $cron_status['scheduled_time'] : 'N/A'; ?></td>
+                    </tr>
+                    <?php endif; ?>
+                    <?php if (isset($cron_status['timestamp_mismatch']) && $cron_status['timestamp_mismatch']): ?>
+                    <tr>
+                        <th>Alerta:</th>
+                        <td style="color:red">Discrepância entre wp_next_scheduled e _get_cron_array (<?php echo $cron_status['mismatch_diff']; ?> segundos)</td>
+                    </tr>
+                    <?php endif; ?>
+                </table>
+                
+                <div class="oapg-cron-actions">
+                    <h3>Ações de Diagnóstico</h3>
+                    <p>Use estes botões para testar ou corrigir problemas com o agendamento.</p>
+                    
+                    <form method="post" action="">
+                        <?php wp_nonce_field('oapg_debug_cron_actions'); ?>
+                        <button type="submit" name="oapg_debug_action" value="force_cron" class="button button-primary">Forçar Execução Agora</button>
+                        <button type="submit" name="oapg_debug_action" value="fix_cron" class="button button-secondary">Reparar Agendamento</button>
+                        <button type="submit" name="oapg_debug_action" value="rebuild_schedule" class="button button-secondary">Reconstruir Agendamento</button>
+                    </form>
+                    
+                    <?php
+                    // Processa ações de formulário
+                    if (isset($_POST['oapg_debug_action']) && check_admin_referer('oapg_debug_cron_actions')) {
+                        $action = sanitize_text_field($_POST['oapg_debug_action']);
+                        
+                        switch ($action) {
+                            case 'force_cron':
+                                echo "<div class='notice notice-info'><p>Executando função de geração manualmente...</p></div>";
+                                if (function_exists('oapg_generate_posts')) {
+                                    oapg_log_debug("==== EXECUÇÃO MANUAL DO CRON INICIADA (via Debug) ====");
+                                    oapg_generate_posts();
+                                    oapg_log_debug("==== EXECUÇÃO MANUAL DO CRON CONCLUÍDA (via Debug) ====");
+                                    echo "<div class='notice notice-success'><p>Função executada com sucesso!</p></div>";
+                                    echo "<script>setTimeout(function() { window.location.reload(); }, 5000);</script>";
+                                } else {
+                                    echo "<div class='notice notice-error'><p>Função 'oapg_generate_posts' não encontrada!</p></div>";
+                                }
+                                break;
+                                
+                            case 'fix_cron':
+                                echo "<div class='notice notice-info'><p>Reparando agendamento...</p></div>";
+                                if (function_exists('wp_clear_scheduled_hook')) {
+                                    wp_clear_scheduled_hook('oapg_generate_posts_event');
+                                    $frequency = absint(get_option('oapg_post_frequency', 1));
+                                    $next_run = time() + ($frequency * 3600);
+                                    wp_schedule_event($next_run, 'oapg_custom', 'oapg_generate_posts_event');
+                                    oapg_log_debug("Agendamento do cron reparado manualmente via Debug. Próxima execução: " . date('Y-m-d H:i:s', $next_run));
+                                    echo "<div class='notice notice-success'><p>Agendamento reparado com sucesso!</p></div>";
+                                    echo "<script>setTimeout(function() { window.location.reload(); }, 2000);</script>";
+                                } else {
+                                    echo "<div class='notice notice-error'><p>Função 'wp_clear_scheduled_hook' não encontrada!</p></div>";
+                                }
+                                break;
+                                
+                            case 'rebuild_schedule':
+                                echo "<div class='notice notice-info'><p>Reconstruindo agendamento personalizado...</p></div>";
+                                
+                                // Recria o intervalo personalizado do cron
+                                $frequency = absint(get_option('oapg_post_frequency', 1));
+                                add_filter('cron_schedules', function($schedules) use ($frequency) {
+                                    $schedules['oapg_custom'] = array(
+                                        'interval' => $frequency * 3600,
+                                        'display'  => sprintf(__('A cada %d horas', 'openai-auto-post-generator'), $frequency),
+                                    );
+                                    return $schedules;
+                                });
+                                
+                                // Reagenda
+                                wp_clear_scheduled_hook('oapg_generate_posts_event');
+                                $next_run = time() + ($frequency * 3600);
+                                $result = wp_schedule_event($next_run, 'oapg_custom', 'oapg_generate_posts_event');
+                                
+                                if ($result) {
+                                    oapg_log_debug("Agendamento e intervalo personalizado reconstruídos via Debug. Próxima execução: " . date('Y-m-d H:i:s', $next_run));
+                                    echo "<div class='notice notice-success'><p>Agendamento reconstruído com sucesso!</p></div>";
+                                } else {
+                                    echo "<div class='notice notice-error'><p>Falha ao reconstruir o agendamento!</p></div>";
+                                }
+                                
+                                echo "<script>setTimeout(function() { window.location.reload(); }, 2000);</script>";
+                                break;
+                        }
+                    }
+                    ?>
+                </div>
+                
+                <div class="oapg-cron-status">
+                    <h3>Informações do Sistema</h3>
+                    
+                    <table class="widefat">
+                        <tr>
+                            <th>Versão do WordPress:</th>
+                            <td><?php echo get_bloginfo('version'); ?></td>
+                        </tr>
+                        <tr>
+                            <th>Servidor Web:</th>
+                            <td><?php echo $_SERVER['SERVER_SOFTWARE']; ?></td>
+                        </tr>
+                        <tr>
+                            <th>PHP Version:</th>
+                            <td><?php echo phpversion(); ?></td>
+                        </tr>
+                        <tr>
+                            <th>WP_CRON_DISABLED:</th>
+                            <td><?php echo defined('DISABLE_WP_CRON') && DISABLE_WP_CRON ? 'Sim' : 'Não'; ?></td>
+                        </tr>
+                        <tr>
+                            <th>ALTERNATE_WP_CRON:</th>
+                            <td><?php echo defined('ALTERNATE_WP_CRON') && ALTERNATE_WP_CRON ? 'Sim' : 'Não'; ?></td>
+                        </tr>
+                        <tr>
+                            <th>Database Size:</th>
+                            <td>
+                                <?php 
+                                global $wpdb;
+                                $sql = "SELECT sum(round(((data_length + index_length) / 1024 / 1024), 2)) as 'size'
+                                        FROM information_schema.TABLES 
+                                        WHERE table_schema = '{$wpdb->dbname}'";
+                                $result = $wpdb->get_row($sql);
+                                echo isset($result->size) ? $result->size . ' MB' : 'N/A'; 
+                                ?>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Total Posts:</th>
+                            <td><?php echo wp_count_posts()->publish + wp_count_posts()->draft; ?></td>
+                        </tr>
+                    </table>
+                </div>
+            <?php } else { ?>
+                <p>Função de diagnóstico do agendamento não disponível.</p>
+            <?php } ?>
+        </div>
     </div>
     
     <style>
@@ -173,6 +354,32 @@ function oapg_debug_page() {
         padding: 10px;
         overflow-x: auto;
         max-height: 300px;
+    }
+    .oapg-cron-info {
+        margin-bottom: 20px;
+    }
+    .oapg-cron-info th {
+        width: 35%;
+        text-align: left;
+        padding: 8px;
+    }
+    .oapg-cron-info td {
+        padding: 8px;
+    }
+    .oapg-cron-actions {
+        background: #f9f9f9;
+        padding: 15px;
+        border: 1px solid #e5e5e5;
+        border-radius: 4px;
+        margin-top: 20px;
+        margin-bottom: 20px;
+    }
+    .oapg-cron-actions h3 {
+        margin-top: 0;
+        margin-bottom: 10px;
+    }
+    .oapg-cron-status {
+        margin-top: 20px;
     }
     </style>
     <?php

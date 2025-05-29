@@ -11,7 +11,7 @@ function oapg_custom_cron_schedule( $schedules ) {
     $frequency = absint( get_option( 'oapg_post_frequency', 1 ) );
     $schedules['oapg_custom'] = array(
         'interval' => $frequency * 3600, // Converte horas para segundos
-        'display'  => sprintf( __( 'A cada %d horas', 'wpost-generator' ), $frequency ),
+        'display'  => sprintf( __( 'A cada %d horas', 'openai-auto-post-generator' ), $frequency ),
     );
     return $schedules;
 }
@@ -34,7 +34,7 @@ function oapg_generate_posts( $force_count = 0 ) {
     }
     
     // Verifica se o limite total definido pelo usuário foi atingido
-    $max_posts = absint(get_option('oapg_max_posts_to_generate', 50));
+    $max_posts = absint(get_option('oapg_max_posts_to_generate', 0));
     $total_generated = absint(get_option('oapg_total_generated', 0)); // Total acumulado desde o início
     
     if ($total_generated >= $max_posts) {
@@ -57,15 +57,14 @@ function oapg_generate_posts( $force_count = 0 ) {
     }
     
     $post_status      = get_option('oapg_post_status', 'draft');
-    $prompt_template  = get_option('oapg_prompt_template', 'Escreva um post otimizado para SEO sobre [TEMA]. Detalhes: [DETALHES].');
-    $image_prompt_template = get_option('oapg_image_prompt_template', 'Uma imagem profissional representando [TEMA]');
+    $prompt_template  = get_option('oapg_prompt_template', '');
+    $image_prompt_template = get_option('oapg_image_prompt_template', '');
     $generate_images = get_option('oapg_generate_images', 'yes') === 'yes';
     $footer_text = get_option('oapg_footer_text', '');
     $youtube_video = get_option('oapg_youtube_video', '');
-    $post_title_template = get_option( 'oapg_post_title_template', '' );
-    $post_title_position = get_option( 'oapg_post_title_position', 'inicio' );
-    $ai_complemento = get_option( 'oapg_ai_complemento', '' );
-    
+    $post_title_template = get_option('oapg_post_title_template', '');
+    $post_title_position = get_option('oapg_post_title_position', 'inicio');
+    $ai_complemento = get_option( 'oapg_ai_complemento', '' );    
     // Verifica se precisa usar produtos
     $usar_produtos = false;
     $produtos = array();
@@ -93,6 +92,12 @@ function oapg_generate_posts( $force_count = 0 ) {
 
     for ( $i = 0; $i < $posts_to_generate_now; $i++ ) {
 
+        // Adiciona uma pausa maior entre a geração de posts consecutivos
+        if ($i > 0) {
+            oapg_log_debug("Aguardando 15 segundos antes de gerar o próximo post...");
+            sleep(15);
+        }
+
         $tema = 'exemplo de tema';
         $detalhes = 'exemplo de detalhes';
         $produto_atual = null;
@@ -117,7 +122,7 @@ function oapg_generate_posts( $force_count = 0 ) {
         if (!empty($ai_complemento)) {
             $prompt .= "\n\n" . $ai_complemento;
         }
-        
+
         $content = oapg_generate_content( $prompt );
         
         if ( $content ) {
@@ -172,6 +177,7 @@ function oapg_generate_posts( $force_count = 0 ) {
             
             $final_content = $content_without_title . $youtube_embed . $footer_content;
             
+            // Prepara os dados do post, mas ainda não cria
             $new_post = array(
                 'post_title'   => $post_title,
                 'post_content' => $final_content,
@@ -179,32 +185,79 @@ function oapg_generate_posts( $force_count = 0 ) {
                 'post_author'  => 1, // Ajuste conforme o ID do autor desejado
             );
             
-            $post_id = wp_insert_post( $new_post );
+            // Variável para armazenar o ID da imagem
+            $attachment_id = false;
             
-            if ( $generate_images && $post_id ) {
+            // Gera a imagem primeiro se estiver habilitado
+            if ( $generate_images ) {
                 if ($usar_produtos && !empty($produto_atual)) {
                     $image_prompt = str_replace('[produto]', $produto_atual['nome'], $image_prompt_template);
                 } else {
                     $image_prompt = str_replace('[TEMA]', $tema, $image_prompt_template);
                 }
                 
+                sleep(3);
+                
                 // Gera a imagem usando a API da OpenAI
                 $image_url = oapg_generate_image($image_prompt);
                 
                 if ($image_url) {
-                    // Baixa a imagem e a adiciona à biblioteca de mídia
-                    $attachment_id = oapg_download_and_attach_image($image_url, $post_title);
+                    // Aumenta o tempo de espera antes de baixar a imagem
+                    sleep(5);
                     
-                    if ($attachment_id) {
-                        // Define a imagem como imagem destacada do post
-                        set_post_thumbnail($post_id, $attachment_id);
-                        oapg_log_debug("Imagem destacada definida para o post #{$post_id}");
-                    } else {
-                        oapg_log_error("Falha ao baixar e anexar a imagem para o post #{$post_id}");
+                    // Realiza até 3 tentativas para baixar e anexar a imagem
+                    $max_attempts = 3;
+                    
+                    for ($attempt = 1; $attempt <= $max_attempts; $attempt++) {
+                        oapg_log_debug("Tentativa {$attempt} de {$max_attempts} para baixar a imagem");
+                        $attachment_id = oapg_download_and_attach_image($image_url, $post_title);
+                        
+                        if ($attachment_id) {
+                            oapg_log_debug("Imagem baixada com sucesso na tentativa {$attempt}");
+                            break;
+                        } else {
+                            oapg_log_error("Falha na tentativa {$attempt} de baixar imagem");
+                            // Aguarda mais tempo entre as tentativas
+                            sleep(5);
+                        }
+                    }
+                    
+                    if (!$attachment_id) {
+                        oapg_log_error("Falha em todas as {$max_attempts} tentativas de baixar a imagem");
                     }
                 } else {
-                    oapg_log_error("Falha ao gerar imagem para o post #{$post_id}");
+                    oapg_log_error("Falha ao gerar imagem para o post");
                 }
+            }
+            
+            // Agora, depois de tentar gerar e baixar a imagem, criamos o post
+            $post_id = wp_insert_post( $new_post );
+            
+            // Se o post foi criado com sucesso e temos uma imagem
+            if ( $post_id && $attachment_id ) {
+                // Aguarda mais tempo antes de definir a imagem destacada
+                sleep(3);
+                
+                // Define a imagem como imagem destacada do post
+                set_post_thumbnail($post_id, $attachment_id);
+                
+                // Verifica se a imagem foi definida corretamente como imagem destacada
+                $has_thumbnail = has_post_thumbnail($post_id);
+                if (!$has_thumbnail) {
+                    // Tenta definir a imagem destacada novamente após uma pausa
+                    sleep(5);
+                    set_post_thumbnail($post_id, $attachment_id);
+                    
+                    if (has_post_thumbnail($post_id)) {
+                        oapg_log_debug("Imagem destacada definida na segunda tentativa para o post #{$post_id}");
+                    } else {
+                        oapg_log_error("Falha nas duas tentativas de definir imagem destacada para o post #{$post_id}");
+                    }
+                } else {
+                    oapg_log_debug("Imagem destacada definida com sucesso para o post #{$post_id}");
+                }
+            } else if (!$post_id) {
+                oapg_log_error("Falha ao criar o post");
             }
             
             $posts_generated = $i + 1;
@@ -216,11 +269,39 @@ function oapg_generate_posts( $force_count = 0 ) {
             update_option('oapg_total_generated', $total_generated);
             
             oapg_log_debug("Post #{$posts_generated}/{$posts_to_generate_now} gerado com sucesso. ID: {$post_id}. Total acumulado: {$total_generated}/{$max_posts}");
+            
+            // Adiciona uma pausa adicional após cada post gerado
+            if ($i < $posts_to_generate_now - 1) {
+                oapg_log_debug("Post #{($i+1)} concluído. Aguardando 10 segundos antes de iniciar o próximo...");
+                sleep(10);
+            }
         }
     }
     
-    // Verifica se todos os posts foram gerados
     oapg_log_debug("Ciclo de geração de posts concluído: {$posts_to_generate_now} posts foram gerados.");
+    
+    $frequency = absint(get_option('oapg_post_frequency', 1));
+    wp_clear_scheduled_hook('oapg_generate_posts_event');
+    $next_run = time() + ($frequency * 3600); // Próxima execução baseada na frequência em horas
+    wp_schedule_event($next_run, 'oapg_custom', 'oapg_generate_posts_event');
+    
+    // Adicionando logs detalhados para debug
+    $next_scheduled = wp_next_scheduled('oapg_generate_posts_event');
+    $current_time = current_time('timestamp');
+    $diff_time = $next_scheduled - $current_time;
+    $hours = floor($diff_time / 3600);
+    $minutes = floor(($diff_time / 60) % 60);
+    
+    oapg_log_debug("==== INFORMAÇÕES DE DEBUG DO AGENDAMENTO ====");
+    oapg_log_debug("Data/hora atual: " . date('Y-m-d H:i:s', $current_time));
+    oapg_log_debug("Próximo agendamento: " . date('Y-m-d H:i:s', $next_scheduled));
+    oapg_log_debug("Intervalo configurado: {$frequency} horas");
+    oapg_log_debug("Tempo até o próximo agendamento: {$hours}h {$minutes}m");
+    oapg_log_debug("ID do agendamento: " . wp_get_schedule('oapg_generate_posts_event'));
+    oapg_log_debug("Posts por ciclo: " . absint(get_option('oapg_posts_per_cycle', 1)));
+    oapg_log_debug("Total gerado: {$total_generated} / {$max_posts}");
+    oapg_log_debug("Geração pausada: " . (get_option('oapg_generation_paused', false) ? 'Sim' : 'Não'));
+    oapg_log_debug("===========================================");
 }
 
 /**
@@ -280,7 +361,7 @@ function oapg_settings_saved($old_value, $new_value) {
     // Verifica se o valor realmente mudou para evitar execuções duplicadas
     if ($old_value !== $new_value) {
         $posts_per_cycle = absint(get_option('oapg_posts_per_cycle', 1));
-        $max_posts = absint(get_option('oapg_max_posts_to_generate', 50));
+        $max_posts = absint(get_option('oapg_max_posts_to_generate', 0));
         
         // Reinicia os contadores
         update_option('oapg_posts_generated', 0);
@@ -506,7 +587,7 @@ function oapg_start_generation_callback() {
  */
 function oapg_get_progress_html() {
     $total_generated = absint(get_option('oapg_total_generated', 0));
-    $max_posts = absint(get_option('oapg_max_posts_to_generate', 50));
+    $max_posts = absint(get_option('oapg_max_posts_to_generate', 0));
     $posts_remaining = $max_posts - $total_generated;
     
     ob_start();
@@ -533,7 +614,7 @@ add_action('wp_ajax_oapg_get_progress', 'oapg_get_progress_callback');
 function oapg_get_progress_callback() {
     // Obtém os dados atuais
     $total_generated = absint(get_option('oapg_total_generated', 0));
-    $max_posts = absint(get_option('oapg_max_posts_to_generate', 50));
+    $max_posts = absint(get_option('oapg_max_posts_to_generate', 0));
     $posts_remaining = $max_posts - $total_generated;
     $is_paused = get_option('oapg_generation_paused', false);
     
@@ -596,4 +677,64 @@ function oapg_toggle_generation_callback() {
         'html' => oapg_get_progress_html(),
         'message' => $pause ? 'Geração de posts pausada com sucesso!' : 'Geração de posts iniciada com sucesso! Todos os contadores foram reiniciados.'
     ));
+}
+
+// Adicionar nova função para verificar e registrar o status do agendamento
+add_action('admin_init', 'oapg_check_cron_status');
+function oapg_check_cron_status() {
+    // Executa apenas ocasionalmente para não sobrecarregar os logs
+    if (mt_rand(1, 10) !== 1) return;
+    
+    $next_scheduled = wp_next_scheduled('oapg_generate_posts_event');
+    $cron_array = _get_cron_array();
+    $current_time = current_time('timestamp');
+    
+    oapg_log_debug("==== VERIFICAÇÃO DE STATUS DO CRON ====");
+    oapg_log_debug("Data/hora atual: " . date('Y-m-d H:i:s', $current_time));
+    
+    if ($next_scheduled) {
+        $diff_time = $next_scheduled - $current_time;
+        $hours = floor($diff_time / 3600);
+        $minutes = floor(($diff_time / 60) % 60);
+        
+        oapg_log_debug("Próximo agendamento: " . date('Y-m-d H:i:s', $next_scheduled));
+        oapg_log_debug("Tempo até o próximo agendamento: {$hours}h {$minutes}m");
+        
+        if ($diff_time < 0) {
+            oapg_log_debug("ALERTA: O agendamento está atrasado por " . abs($hours) . "h " . abs($minutes) . "m");
+        }
+    } else {
+        oapg_log_debug("ALERTA: Nenhum agendamento encontrado para 'oapg_generate_posts_event'");
+        
+        // Tentar registrar o evento novamente se não estiver agendado
+        $frequency = absint(get_option('oapg_post_frequency', 1));
+        $next_run = time() + ($frequency * 3600);
+        wp_schedule_event($next_run, 'oapg_custom', 'oapg_generate_posts_event');
+        oapg_log_debug("Tentativa de reagendamento para: " . date('Y-m-d H:i:s', $next_run));
+    }
+    
+    // Verifica se o hook está listado no array de cron
+    if (is_array($cron_array)) {
+        $found = false;
+        foreach ($cron_array as $timestamp => $hooks) {
+            if (isset($hooks['oapg_generate_posts_event'])) {
+                $found = true;
+                oapg_log_debug("Hook encontrado no array de cron para o timestamp: " . date('Y-m-d H:i:s', $timestamp));
+            }
+        }
+        
+        if (!$found) {
+            oapg_log_debug("ALERTA: Hook não encontrado no array de cron do WordPress");
+        }
+    } else {
+        oapg_log_debug("ERRO: Array de cron do WordPress não está disponível");
+    }
+    
+    // Verifica o status da geração
+    oapg_log_debug("Posts por ciclo: " . absint(get_option('oapg_posts_per_cycle', 1)));
+    oapg_log_debug("Posts gerados no último ciclo: " . absint(get_option('oapg_posts_generated', 0)));
+    oapg_log_debug("Total gerado: " . absint(get_option('oapg_total_generated', 0)));
+    oapg_log_debug("Limite total: " . absint(get_option('oapg_max_posts_to_generate', 0)));
+    oapg_log_debug("Geração pausada: " . (get_option('oapg_generation_paused', false) ? 'Sim' : 'Não'));
+    oapg_log_debug("=========================================");
 }
