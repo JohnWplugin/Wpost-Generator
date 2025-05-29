@@ -58,6 +58,17 @@ function oapg_admin_enqueue_scripts($hook) {
     
     wp_enqueue_style('oapg-admin-style', plugin_dir_url(dirname(__FILE__)) . 'assets/css/admin-style.css', array(), '1.0.0');
     wp_enqueue_script('oapg-admin-script', plugin_dir_url(dirname(__FILE__)) . 'assets/js/admin-script.js', array('jquery'), '1.0.0', true);
+    
+    // Adiciona variáveis para o JavaScript
+    wp_localize_script('oapg-admin-script', 'oapg_admin_vars', array(
+        'toggle_nonce' => wp_create_nonce('oapg_toggle_generation_nonce'),
+        'reset_nonce' => wp_create_nonce('oapg_reset_counters_nonce'),
+        'run_now_nonce' => wp_create_nonce('oapg_run_now_nonce'),
+        'unlock_nonce' => wp_create_nonce('oapg_unlock_generation_nonce'),
+        'keywords_nonce' => wp_create_nonce('oapg_save_keywords_nonce'),
+        'progress_nonce' => wp_create_nonce('oapg_get_progress_nonce'),
+        'ajaxurl' => admin_url('admin-ajax.php')
+    ));
 }
 
 /**
@@ -399,6 +410,12 @@ function oapg_settings_page() {
                                         <p class="description">Texto adicional que será enviado em todas as requisições para a IA. Útil para definir estilos ou regras específicas.</p>
                                     </div>
                                     
+                                    <!-- <div class="oapg-form-row">
+                                        <label for="oapg_system_prompt">Instruções para a IA</label>
+                                        <textarea id="oapg_system_prompt" name="oapg_system_prompt" rows="4" cols="50"><?php echo esc_textarea(get_option('oapg_system_prompt', 'Você é um redator profissional. Crie um post bem estruturado com título.')); ?></textarea>
+                                        <p class="description">Instruções de sistema para a IA. Define como a IA deve se comportar ao gerar conteúdo. Se vazio, será usado um prompt básico.</p>
+                                    </div> -->
+                                    
                                     <div class="oapg-form-row">
                                         <label for="oapg_generate_images">Gerar Imagens</label>
                                         <select id="oapg_generate_images" name="oapg_generate_images">
@@ -594,336 +611,169 @@ function oapg_settings_page() {
             }
         });
         
-        // Botão de alternar geração (iniciar/parar)
-        $('#oapg-generation-toggle').on('click', function(e) {
-            e.preventDefault();
-            var action = $(this).data('action');
-            var confirmMsg = (action === 'stop') ? 
-                'Tem certeza que deseja parar a geração de posts?' : 
-                'Tem certeza que deseja iniciar a geração de posts?';
+        // Função para atualizar o progresso
+        function updateProgress() {
+            $.ajax({
+                url: ajaxurl,
+                type: 'POST',
+                data: {
+                    action: 'oapg_get_progress',
+                    nonce: oapg_admin_vars.progress_nonce
+                },
+                success: function(response) {
+                    if (response.success) {
+                        var data = response.data;
+                        
+                        // Atualiza os contadores
+                        $('.oapg-stat-box:eq(0) .oapg-stat-value').text(data.total_generated);
+                        $('.oapg-stat-box:eq(1) .oapg-stat-value').text(data.posts_remaining);
+                        
+                        // Atualiza o limite mensal restante
+                        $('.oapg-limite-mensal-info .oapg-stat-value').text(data.posts_restantes_mes);
+                        
+                        // Atualiza a barra de progresso
+                        $('.oapg-progress').css('width', data.percentage + '%');
+                        $('.oapg-progress-text').text(data.percentage + '% concluído (' + data.total_generated + ' de ' + data.max_posts + ' posts)');
+                        
+                        // Atualiza a barra de progresso mensal
+                        var monthlyPercentage = Math.round((data.posts_no_mes / Math.max(1, data.limite_mensal)) * 100);
+                        $('.oapg-monthly-progress').css('width', monthlyPercentage + '%');
+                        $('.oapg-progress-text').eq(1).text(monthlyPercentage + '% do limite mensal utilizado (' + data.posts_no_mes + ' de ' + data.limite_mensal + ' posts)');
+                        
+                        // Atualiza o status
+                        var statusText = data.is_paused ? 'Geração Pausada' : 'Geração Ativa';
+                        var statusClass = data.is_paused ? 'paused' : 'active';
+                        $('.oapg-status').text(statusText).removeClass('active paused').addClass(statusClass);
+                        
+                        // Mostra/esconde mensagens
+                        if (data.limite_ciclo_atingido) {
+                            $('.oapg-complete-message').show();
+                        } else {
+                            $('.oapg-complete-message').hide();
+                        }
+                        
+                        if (data.limite_mensal_atingido) {
+                            $('.oapg-limite-mensal-message').show();
+                        } else {
+                            $('.oapg-limite-mensal-message').hide();
+                        }
+                        
+                        // Atualiza o botão de toggle
+                        $('#oapg-generation-toggle').text(data.is_paused ? 'Iniciar Geração' : 'Parar Geração')
+                            .data('action', data.is_paused ? 'start' : 'stop')
+                            .removeClass('button-primary button-secondary')
+                            .addClass(data.is_paused ? 'button-primary' : 'button-secondary');
+                    } else if (response.data) {
+                        console.error('Erro na resposta AJAX de progresso:', response.data);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Erro na requisição AJAX de progresso:', {
+                        xhr: xhr,
+                        status: status,
+                        error: error
+                    });
+                    
+                    // Depois do primeiro erro, reduz a frequência das tentativas para não sobrecarregar
+                    clearInterval(progressInterval);
+                    progressInterval = setInterval(updateProgress, 15000); // Tenta a cada 15 segundos depois de um erro
+                }
+            });
+        }
+        
+        // Tenta obter o progresso inicial, depois configura o intervalo
+        updateProgress();
+        
+        // Configura o intervalo após a primeira execução
+        var progressInterval = setInterval(updateProgress, 5000);
+
+        // Funções para gerenciar o agendamento
+        jQuery(document).ready(function($) {
+            // Forçar execução manual do cron
+            $('#oapg-force-cron').on('click', function(e) {
+                e.preventDefault();
                 
-            if (confirm(confirmMsg)) {
+                if (!confirm('Isso irá forçar a execução imediata da geração de posts. Continuar?')) {
+                    return;
+                }
+                
+                var button = $(this);
+                var resultDiv = $('#oapg-cron-result');
+                
+                button.prop('disabled', true).text('Executando...');
+                resultDiv.html('<p>Executando a função de geração de posts. Isso pode levar alguns minutos...</p>');
+                
                 $.ajax({
                     url: ajaxurl,
                     type: 'POST',
                     data: {
-                        action: 'oapg_toggle_generation',
-                        toggle_action: action,
-                        nonce: '<?php echo wp_create_nonce('oapg_toggle_generation_nonce'); ?>'
-                    },
-                    beforeSend: function() {
-                        // Desabilita o botão durante a requisição
-                        $('#oapg-generation-toggle').prop('disabled', true);
+                        action: 'oapg_force_cron',
+                        nonce: button.data('nonce')
                     },
                     success: function(response) {
+                        button.prop('disabled', false).text('Forçar Execução Agora');
+                        
                         if (response.success) {
-                            // Atualiza imediatamente após a ação
-                            updateProgress();
-                            
-                            // Exibe mensagem de sucesso
-                            alert(response.data.message);
+                            resultDiv.html('<div class="notice notice-success"><p>' + response.data.message + '</p></div>');
+                            // Recarrega a página após alguns segundos
+                            setTimeout(function() {
+                                location.reload();
+                            }, 3000);
                         } else {
-                            alert('Erro ao processar a solicitação: ' + response.data);
+                            resultDiv.html('<div class="notice notice-error"><p>Erro: ' + response.data + '</p></div>');
                         }
                     },
-                    complete: function() {
-                        // Reabilita o botão após a requisição
-                        $('#oapg-generation-toggle').prop('disabled', false);
+                    error: function() {
+                        button.prop('disabled', false).text('Forçar Execução Agora');
+                        resultDiv.html('<div class="notice notice-error"><p>Falha na comunicação com o servidor.</p></div>');
                     }
                 });
-            }
+            });
+            
+            // Reparar agendamento do cron
+            $('#oapg-fix-cron').on('click', function(e) {
+                e.preventDefault();
+                
+                if (!confirm('Isso irá reparar o agendamento do cron. Continuar?')) {
+                    return;
+                }
+                
+                var button = $(this);
+                var resultDiv = $('#oapg-cron-result');
+                
+                button.prop('disabled', true).text('Reparando...');
+                resultDiv.html('<p>Reparando o agendamento do cron...</p>');
+                
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'oapg_fix_cron',
+                        nonce: button.data('nonce')
+                    },
+                    success: function(response) {
+                        button.prop('disabled', false).text('Reparar Agendamento');
+                        
+                        if (response.success) {
+                            resultDiv.html('<div class="notice notice-success"><p>' + response.data.message + '</p></div>');
+                            // Recarrega a página após alguns segundos
+                            setTimeout(function() {
+                                location.reload();
+                            }, 3000);
+                        } else {
+                            resultDiv.html('<div class="notice notice-error"><p>Erro: ' + response.data + '</p></div>');
+                        }
+                    },
+                    error: function() {
+                        button.prop('disabled', false).text('Reparar Agendamento');
+                        resultDiv.html('<div class="notice notice-error"><p>Falha na comunicação com o servidor.</p></div>');
+                    }
+                });
+            });
         });
     });
     </script>
     
-    <script type="text/javascript">
-        jQuery(document).ready(function($) {
-            // Atualiza o progresso via AJAX
-            function updateProgress() {
-                // Inicializa as barras de progresso enquanto os dados carregam
-                initProgressBars();
-                
-                $.ajax({
-                    url: ajaxurl,
-                    type: 'POST',
-                    data: {
-                        action: 'oapg_get_progress'
-                    },
-                    success: function(response) {
-                        if (response.success) {
-                            // Verifica e define valores padrão para propriedades indefinidas
-                            var data = response.data || {};
-                            var total_generated =  data.total_generated;
-                            var max_posts =  data.max_posts;
-                            var posts_remaining =  data.posts_remaining;
-                            var percentage =  data.percentage;
-                            var posts_no_mes =  data.posts_no_mes;
-                            var limite_mensal =  data.limite_mensal;
-                            var posts_restantes_mes =  data.posts_restantes_mes;
-                            var is_paused =  data.is_paused;
-                            var limite_mensal_atingido =  data.limite_mensal_atingido;
-                            
-                            // Atualiza o status
-                            if (is_paused) {
-                                $('.oapg-status').removeClass('active').addClass('paused').text('Geração Pausada');
-                                
-                                // Limpa a barra de progresso quando pausado
-                                $('.oapg-progress').css('width', '0%');
-                                $('.oapg-progress-text').html('0% concluído (0 de ' + max_posts + ' posts)');
-                                
-                                // Zera as contagens no dashboard
-                                $('.oapg-stat-box:nth-child(1) .oapg-stat-value').text('0');
-                                $('.oapg-stat-box:nth-child(2) .oapg-stat-value').text(max_posts);
-                                
-                                // Remove mensagens de limite atingido
-                                $('.oapg-complete-message').remove();
-                            } else {
-                                $('.oapg-status').removeClass('paused').addClass('active').text('Geração Ativa');
-                                
-                                // Atualiza a barra de progresso quando ativo
-                                $('.oapg-progress').css('width', percentage + '%');
-                                $('.oapg-progress-text').html(percentage + '% concluído (' + total_generated + ' de ' + max_posts + ' posts)');
-                                
-                                // Atualiza os números de estatísticas
-                                $('.oapg-stat-box:nth-child(1) .oapg-stat-value').text(total_generated);
-                                $('.oapg-stat-box:nth-child(2) .oapg-stat-value').text(posts_remaining);
-                                
-                                // Mostra mensagem de limite atingido se necessário
-                                if (total_generated >= max_posts && max_posts > 0) {
-                                    if ($('.oapg-complete-message').length === 0) {
-                                        $('.oapg-status-info').append('<p class="oapg-complete-message">Limite máximo de posts atingido!</p>');
-                                    }
-                                } else {
-                                    $('.oapg-complete-message').remove();
-                                }
-                            }
-                            
-                            // Atualiza o card do limite mensal (sempre, independente do status)
-                            var percentMensal = Math.round((posts_no_mes / limite_mensal) * 100);
-                            $('.oapg-monthly-progress').css('width', percentMensal + '%');
-                            $('.oapg-status-card .oapg-progress-text').html(percentMensal + '% do limite mensal utilizado (' + posts_no_mes + ' de ' + limite_mensal + ' posts)');
-                            
-                            // Verifica se o limite mensal foi atingido - independente do status
-                            if (limite_mensal_atingido) {
-                                // Adiciona status de limite mensal atingido
-                                $('.oapg-status').removeClass('active').addClass('paused').text('Limite Mensal Atingido');
-                                
-                                // Desativa o botão de iniciar geração
-                                $('#oapg-generation-toggle').prop('disabled', true);
-                                
-                                if ($('.oapg-limite-mensal-message').length === 0) {
-                                    $('.oapg-status-info').append('<p class="oapg-limite-mensal-message">Limite mensal de 500 posts atingido!</p>');
-                                }
-                            } else {
-                                // Remove a mensagem de limite mensal se existir
-                                $('.oapg-limite-mensal-message').remove();
-                                
-                                // Garante que o botão de geração esteja habilitado
-                                $('#oapg-generation-toggle').prop('disabled', false);
-                            }
-                            
-                            // Adiciona/atualiza info do limite mensal (sempre visível)
-                            if ($('.oapg-limite-mensal-info').length === 0) {
-                                $('.oapg-dashboard-stats').append('<div class="oapg-stat-box oapg-limite-mensal-info"><span class="dashicons dashicons-calendar"></span><div class="oapg-stat-content"><span class="oapg-stat-value">' + posts_restantes_mes + '</span><span class="oapg-stat-label">Limite Mensal Restante</span></div></div>');
-                            } else {
-                                $('.oapg-limite-mensal-info .oapg-stat-value').text(posts_restantes_mes);
-                            }
-                            
-                            // Destaca visualmente o limite mensal quando está próximo de atingir
-                            if (posts_restantes_mes < 50) {
-                                $('.oapg-limite-mensal-info').addClass('oapg-limite-alerta');
-                            } else {
-                                $('.oapg-limite-mensal-info').removeClass('oapg-limite-alerta');
-                            }
-                            
-                            // Atualiza o botão de acordo com o estado (se não estiver com limite mensal atingido)
-                            if (!limite_mensal_atingido) {
-                                var $button = $('#oapg-generation-toggle');
-                                if (is_paused) {
-                                    $button.text('Iniciar Geração')
-                                        .removeClass('button-secondary')
-                                        .addClass('button-primary')
-                                        .data('action', 'start');
-                                } else {
-                                    $button.text('Parar Geração')
-                                        .removeClass('button-primary')
-                                        .addClass('button-secondary')
-                                        .data('action', 'stop');
-                                }
-                            }
-                        } else {
-                            console.error('Erro na resposta AJAX:', response);
-                        }
-                    },
-                    error: function(xhr, status, error) {
-                        console.error('Erro na requisição AJAX:', error);
-                    }
-                });
-            }
-            
-            // Inicializa as barras de progresso com valores padrão
-            function initProgressBars() {
-                // Valores padrão para exibição inicial
-                var defaultPercentage = 0;
-                var defaultMax = 50;
-                
-                // Barra de progresso principal
-                if ($('.oapg-progress-text').length) {
-                    var progressText = $('.oapg-progress-text').html();
-                    if (progressText === '' || progressText.includes('undefined') || progressText.includes('NaN')) {
-                        $('.oapg-progress').css('width', defaultPercentage + '%');
-                        $('.oapg-progress-text').html(defaultPercentage + '% concluído (0 de ' + defaultMax + ' posts)');
-                    }
-                }
-                
-                // Barra de limite mensal
-                if ($('.oapg-status-card .oapg-progress-text').length) {
-                    var monthlyProgressText = $('.oapg-status-card .oapg-progress-text').html();
-                    if (monthlyProgressText === '' || monthlyProgressText.includes('undefined') || monthlyProgressText.includes('NaN')) {
-                        $('.oapg-monthly-progress').css('width', defaultPercentage + '%');
-                        $('.oapg-status-card .oapg-progress-text').html(defaultPercentage + '% do limite mensal utilizado (0 de 500 posts)');
-                    }
-                }
-            }
-            
-            // Atualiza o progresso a cada 5 segundos
-            var progressInterval = setInterval(updateProgress, 5000);
-            
-            // Botão de alternar geração (iniciar/parar)
-            $('#oapg-generation-toggle').on('click', function(e) {
-                e.preventDefault();
-                var action = $(this).data('action');
-                var confirmMsg = (action === 'stop') ? 
-                    'Tem certeza que deseja parar a geração de posts?' : 
-                    'Tem certeza que deseja iniciar a geração de posts?';
-                    
-                if (confirm(confirmMsg)) {
-                    $.ajax({
-                        url: ajaxurl,
-                        type: 'POST',
-                        data: {
-                            action: 'oapg_toggle_generation',
-                            toggle_action: action,
-                            nonce: '<?php echo wp_create_nonce('oapg_toggle_generation_nonce'); ?>'
-                        },
-                        beforeSend: function() {
-                            // Desabilita o botão durante a requisição
-                            $('#oapg-generation-toggle').prop('disabled', true);
-                        },
-                        success: function(response) {
-                            if (response.success) {
-                                // Atualiza imediatamente após a ação
-                                updateProgress();
-                                
-                                // Exibe mensagem de sucesso
-                                alert(response.data.message);
-                            } else {
-                                alert('Erro ao processar a solicitação: ' + response.data);
-                            }
-                        },
-                        complete: function() {
-                            // Reabilita o botão após a requisição
-                            $('#oapg-generation-toggle').prop('disabled', false);
-                        }
-                    });
-                }
-            });
-            
-            // Botão de reiniciar contadores
-            $('#oapg-reset-counter').on('click', function(e) {
-                e.preventDefault();
-                if (confirm('Tem certeza que deseja reiniciar os contadores de posts?')) {
-                    $.ajax({
-                        url: ajaxurl,
-                        type: 'POST',
-                        data: {
-                            action: 'oapg_reset_counters',
-                            nonce: '<?php echo wp_create_nonce('oapg_reset_counters_nonce'); ?>'
-                        },
-                        success: function(response) {
-                            if (response.success) {
-                                alert('Contadores reiniciados com sucesso!');
-                                updateProgress(); // Atualiza o progresso imediatamente
-                            } else {
-                                alert('Erro ao reiniciar contadores: ' + response.data);
-                            }
-                        }
-                    });
-                }
-            });
-
-                    // Importar palavras-chave a partir de um arquivo
-                    $('#oapg_import_keywords').on('click', function() {
-                        var fileInput = $('#oapg_keywords_file')[0];
-                        if (fileInput.files.length > 0) {
-                            var file = fileInput.files[0];
-                            var reader = new FileReader();
-                            reader.onload = function(e) {
-                                var content = e.target.result;
-                                // Remove o BOM (Byte Order Mark) se existir
-                                content = content.replace(/^\uFEFF/, '');
-                                // Garantir que a quebra de linha seja consistente
-                                content = content.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-                                $('#oapg_keywords_list').val('').val(content);
-                                $('#oapg-keywords-status').text('Arquivo carregado! Salvando automaticamente...').css('color', '#0073aa');
-                                updateKeywordsCount();
-                                // Aciona automaticamente o botão de salvar
-                                $('#oapg_save_keywords').trigger('click');
-                            };
-                            reader.readAsText(file, 'UTF-8');
-                        } else {
-                            alert('Por favor, selecione um arquivo para importar.');
-                        }
-                    });
-                    
-                    // Salvar palavras-chave diretamente
-                    $('#oapg_save_keywords').on('click', function() {
-                        var button = $(this);
-                        var statusElem = $('#oapg-keywords-status');
-                        var keywords = $('#oapg_keywords_list').val();
-                        
-                        // Desativa botão e mostra status
-                        button.prop('disabled', true);
-                        statusElem.text('Salvando...').css('color', '#666');
-                        
-                        // Criar um formulário para submissão
-                        var form = $('<form method="post"></form>');
-                        form.append('<input type="hidden" name="option_page" value="oapg_content_settings_group" />');
-                        form.append('<input type="hidden" name="action" value="update" />');
-                        form.append('<input type="hidden" name="_wpnonce" value="' + $('input[name="_wpnonce"]').val() + '" />');
-                        form.append('<input type="hidden" name="oapg_keywords_list" value="' + encodeURIComponent(keywords) + '" />');
-                        
-                        // Submete o formulário
-                        form.appendTo('body').submit();
-                    });
-                    
-                    // Atualiza a contagem de palavras-chave
-                    function updateKeywordsCount() {
-                        var keywords = $('#oapg_keywords_list').val();
-                        var lines = keywords.split('\n').filter(function(line) {
-                            return line.trim() !== '';
-                        });
-                        
-                        $('#oapg-keywords-count').text(lines.length + ' palavras-chave cadastradas');
-                    }
-                    
-                    // Executa ao carregar a página
-                    $(document).ready(function() {
-                        updateKeywordsCount();
-                        
-                        // Inicializa as barras de progresso imediatamente ao carregar a página
-                        initProgressBars();
-                        
-                        // Faz a primeira chamada de atualização
-                        updateProgress();
-                        
-                        // Executa ao modificar o conteúdo
-                        $('#oapg_keywords_list').on('input', function() {
-                            updateKeywordsCount();
-                        });
-                    });
-                });
-            </script>
     <style>
     /* Estilos para as ações rápidas */
     .oapg-quick-actions {
@@ -1120,6 +970,43 @@ function oapg_settings_page() {
     .oapg-test-form input[type="submit"] {
         margin-top: 10px;
     }
+
+    /* Estilos para a seção de informações do agendamento */
+    .oapg-cron-info {
+        margin-bottom: 20px;
+    }
+    
+    .oapg-cron-info th {
+        width: 35%;
+        text-align: left;
+        padding: 8px;
+    }
+    
+    .oapg-cron-info td {
+        padding: 8px;
+    }
+    
+    .oapg-cron-actions {
+        background: #f9f9f9;
+        padding: 15px;
+        border: 1px solid #e5e5e5;
+        border-radius: 4px;
+        margin-top: 20px;
+    }
+    
+    .oapg-cron-actions h3 {
+        margin-top: 0;
+        margin-bottom: 10px;
+    }
+    
+    .oapg-cron-result {
+        margin-top: 15px;
+    }
+    
+    #oapg-force-cron, #oapg-fix-cron {
+        margin-right: 10px;
+        margin-top: 10px;
+    }
     </style>
     <?php
 }
@@ -1142,6 +1029,7 @@ function oapg_register_settings() {
     register_setting('oapg_content_settings_group', 'oapg_post_title_position');
     register_setting('oapg_content_settings_group', 'oapg_ai_complemento');
     register_setting('oapg_content_settings_group', 'oapg_keywords_list');
+    register_setting('oapg_content_settings_group', 'oapg_system_prompt');
     
     // Grupo de configurações de agendamento
     register_setting('oapg_schedule_settings_group', 'oapg_post_status');

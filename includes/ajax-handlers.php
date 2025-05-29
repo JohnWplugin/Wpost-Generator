@@ -2,6 +2,12 @@
 // AJAX handler para obter o progresso atual
 add_action('wp_ajax_oapg_get_progress', 'oapg_get_progress_callback');
 function oapg_get_progress_callback() {
+    // Verifica o nonce para segurança
+    if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'oapg_get_progress_nonce')) {
+        wp_send_json_error('Verificação de segurança falhou.');
+        return;
+    }
+    
     // Obtém os dados atuais
     $total_generated = absint(get_option('oapg_total_generated', 0));
     $max_posts = absint(get_option('oapg_max_posts_to_generate', 50));
@@ -121,4 +127,85 @@ function oapg_toggle_generation_callback() {
         'limite_mensal_atingido' => $limite_mensal_atingido,
         'limite_ciclo_atingido' => $limite_ciclo_atingido
     ));
+}
+
+// AJAX handler para forçar a execução do cron
+add_action('wp_ajax_oapg_force_cron', 'oapg_force_cron_callback');
+function oapg_force_cron_callback() {
+    // Verifica o nonce
+    if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'oapg_force_cron_nonce')) {
+        wp_send_json_error('Erro de segurança.');
+        return;
+    }
+    
+    // Verifica se a função existe
+    if (!function_exists('oapg_generate_posts')) {
+        wp_send_json_error('Função de geração não encontrada.');
+        return;
+    }
+    
+    // Obtém o status atual antes da execução
+    $status_antes = function_exists('oapg_check_cron_schedule_status') ? oapg_check_cron_schedule_status(true) : array();
+    
+    // Força a execução imediata da função principal
+    try {
+        // Desativa temporariamente o limite de tempo de execução
+        if (function_exists('set_time_limit')) {
+            set_time_limit(300); // 5 minutos
+        }
+        
+        // Executa a função de geração
+        oapg_log_debug("==== EXECUÇÃO MANUAL DO CRON INICIADA ====");
+        oapg_generate_posts();
+        oapg_log_debug("==== EXECUÇÃO MANUAL DO CRON CONCLUÍDA ====");
+        
+        // Verifica o status após a execução
+        $status_depois = function_exists('oapg_check_cron_schedule_status') ? oapg_check_cron_schedule_status(true) : array();
+        
+        wp_send_json_success(array(
+            'message' => 'Função de geração executada com sucesso!',
+            'status_antes' => $status_antes,
+            'status_depois' => $status_depois
+        ));
+    } catch (Exception $e) {
+        oapg_log_error("Erro ao executar função de geração manualmente: " . $e->getMessage());
+        wp_send_json_error('Erro ao executar a função: ' . $e->getMessage());
+    }
+}
+
+// AJAX handler para reparar o agendamento do cron
+add_action('wp_ajax_oapg_fix_cron', 'oapg_fix_cron_callback');
+function oapg_fix_cron_callback() {
+    // Verifica o nonce
+    if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'oapg_fix_cron_nonce')) {
+        wp_send_json_error('Erro de segurança.');
+        return;
+    }
+    
+    // Verifica o status atual antes da execução
+    $status_antes = function_exists('oapg_check_cron_schedule_status') ? oapg_check_cron_schedule_status(true) : array();
+    
+    try {
+        // Limpa o agendamento existente (se houver)
+        wp_clear_scheduled_hook('oapg_generate_posts_event');
+        
+        // Agenda novamente
+        $frequency = absint(get_option('oapg_post_frequency', 1));
+        $next_run = time() + ($frequency * 3600);
+        wp_schedule_event($next_run, 'oapg_custom', 'oapg_generate_posts_event');
+        
+        oapg_log_debug("Agendamento do cron reparado manualmente. Próxima execução: " . date('Y-m-d H:i:s', $next_run));
+        
+        // Verifica o status após o reparo
+        $status_depois = function_exists('oapg_check_cron_schedule_status') ? oapg_check_cron_schedule_status(true) : array();
+        
+        wp_send_json_success(array(
+            'message' => 'Agendamento reparado com sucesso! Próxima execução: ' . date('Y-m-d H:i:s', $next_run),
+            'status_antes' => $status_antes,
+            'status_depois' => $status_depois
+        ));
+    } catch (Exception $e) {
+        oapg_log_error("Erro ao reparar agendamento: " . $e->getMessage());
+        wp_send_json_error('Erro ao reparar agendamento: ' . $e->getMessage());
+    }
 }
